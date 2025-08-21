@@ -13,9 +13,11 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,107 +32,108 @@ import br.edu.ifpb.instagram.repository.UserRepository;
 public class UserServiceImplTest {
 
     @MockitoBean
-    UserRepository userRepository;
+    private UserRepository userRepository;
 
     @MockitoBean
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     @Autowired
-    UserServiceImpl userService;
+    private UserServiceImpl userService;
+
+    private UserDto userDto;
+    private UserEntity userEntity;
+
+    @BeforeEach
+    void setUp() {
+        userDto = new UserDto(null, "Gabriel Laet", "laet", "gabriellaetfm12@gmail.com", "123456", "123456");
+
+        userEntity = new UserEntity();
+        userEntity.setId(1L);
+        userEntity.setFullName("Gabriel Laet");
+        userEntity.setUsername("laet");
+        userEntity.setEmail("gabriellaetfm12@gmail.com");
+        userEntity.setEncryptedPassword("123456");
+        
+        Mockito.reset(userRepository, passwordEncoder);
+    }
 
     // ------------------ FIND BY ID ------------------
     @Test
     void testFindById_WhenUserExists_ShouldReturnUserDto() {
-        Long userId = 1L;
+        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
 
-        UserEntity mockUserEntity = new UserEntity();
-        mockUserEntity.setId(userId);
-        mockUserEntity.setFullName("Paulo Pereira");
-        mockUserEntity.setEmail("paulo@ppereira.dev");
+        UserDto found = userService.findById(1L);
 
-        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUserEntity));
+        assertNotNull(found);
+        assertEquals(userEntity.getId(), found.id());
+        assertEquals(userEntity.getFullName(), found.fullName());
+        assertEquals(userEntity.getEmail(), found.email());
 
-        UserDto userDto = userService.findById(userId);
-
-        assertNotNull(userDto);
-        assertEquals(mockUserEntity.getId(), userDto.id());
-        assertEquals(mockUserEntity.getFullName(), userDto.fullName());
-        assertEquals(mockUserEntity.getEmail(), userDto.email());
-
-        verify(userRepository, times(1)).findById(userId);
+        verify(userRepository, times(1)).findById(1L);
     }
 
     @Test
-    void testFindById_ThrowsExceptionWhenUserNotFound() {
-        Long userId = 999L;
-        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+    void testFindById_WhenUserNotFound_ShouldThrowException() {
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> userService.findById(userId));
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> userService.findById(999L));
         assertEquals("User not found with id: 999", exception.getMessage());
 
-        verify(userRepository, times(1)).findById(userId);
+        verify(userRepository, times(1)).findById(999L);
     }
 
     // ------------------ CREATE USER ------------------
     @Test
-    void testCreateUser_ThrowsExceptionWhenEmailExists() {
-        UserDto userDto = new UserDto(null, "Name", "username", "existing@email.com", "123", "123");
+    void testCreateUser_WhenEmailExists_ShouldThrowException() {
         when(userRepository.existsByEmail("existing@email.com")).thenReturn(true);
+        UserDto dto = new UserDto(null, "Name", "username", "existing@email.com", "123", "123");
 
-        FieldAlreadyExistsException exception = assertThrows(FieldAlreadyExistsException.class, () -> userService.createUser(userDto));
+        FieldAlreadyExistsException exception = assertThrows(FieldAlreadyExistsException.class, () -> userService.createUser(dto));
         assertEquals("E-email already in use.", exception.getMessage());
     }
 
     @Test
-    void testCreateUser_SuccessWhenValidUser() {
-        UserDto userDto = new UserDto(null, "Gabriel Laet", "laet", "gabriellaetfm12@gmail.com", "123456", "123456");
-
+    void testCreateUser_WhenValidUser_ShouldSaveAndReturnUserDto() {
         when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
             UserEntity u = invocation.getArgument(0);
             u.setId(2L);
             return u;
         });
 
-        UserDto savedUser = userService.createUser(userDto);
+        UserDto saved = userService.createUser(userDto);
 
-        assertNotNull(savedUser);
-        assertEquals(2L, savedUser.id());
-        assertEquals(userDto.fullName(), savedUser.fullName());
-        assertEquals(userDto.email(), savedUser.email());
+        assertNotNull(saved);
+        assertEquals(2L, saved.id());
+        assertEquals(userDto.fullName(), saved.fullName());
+        assertEquals(userDto.email(), saved.email());
 
         verify(userRepository, times(1)).save(any(UserEntity.class));
     }
 
     @Test
-    void testCreateUser_SuccessWithPasswordEncoding() {
-        UserDto userDto = new UserDto(null, "Gabriel Laet", "laet", "gabriellaetfm12@gmail.com", "123456", "123456");
-
-        when(passwordEncoder.encode("123456")).thenReturn("bananinha123");
+    void testCreateUser_WhenValidUser_ShouldEncodePassword() {
+        when(passwordEncoder.encode(userDto.password())).thenReturn("encrypted123");
         when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> {
-            UserEntity user = i.getArgument(0);
-            user.setId(2L);
-            return user;
+            UserEntity u = i.getArgument(0);
+            u.setId(2L);
+            return u;
         });
 
-        UserDto savedUser = userService.createUser(userDto);
+        UserDto saved = userService.createUser(userDto);
 
-        assertNotNull(savedUser);
-        assertEquals(2L, savedUser.id());
-        assertEquals(userDto.fullName(), savedUser.fullName());
-        assertEquals(userDto.email(), savedUser.email());
-
-        verify(passwordEncoder, times(1)).encode("123456");
-        verify(userRepository, times(1)).save(any(UserEntity.class));
+        assertNotNull(saved);
+        assertEquals(2L, saved.id());
 
         ArgumentCaptor<UserEntity> captor = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(captor.capture());
-        assertEquals("bananinha123", captor.getValue().getEncryptedPassword());
+        assertEquals("encrypted123", captor.getValue().getEncryptedPassword());
+        verify(passwordEncoder, times(1)).encode(userDto.password());
     }
 
     // ------------------ DELETE USER ------------------
     @Test
-    void testDeleteUser_SuccessWhenUserExists() {
+    void testDeleteUser_WhenUserExists_ShouldDeleteUser() {
         when(userRepository.existsById(2L)).thenReturn(true);
 
         userService.deleteUser(2L);
@@ -140,7 +143,7 @@ public class UserServiceImplTest {
     }
 
     @Test
-    void testDeleteUser_ThrowsExceptionWhenUserNotFound() {
+    void testDeleteUser_WhenUserNotFound_ShouldThrowException() {
         when(userRepository.existsById(99L)).thenReturn(false);
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> userService.deleteUser(99L));
@@ -152,28 +155,24 @@ public class UserServiceImplTest {
 
     // ------------------ UPDATE USER ------------------
     @Test
-    void testUpdateUser_SuccessWithPasswordEncoding() {
-        UserDto userDto = new UserDto(2L, "Gabriel Laet Updated", "laet", "gabriellaetfm12@gmail.com", "newpass", "newpass");
+    void testUpdateUser_WhenValidUser_ShouldUpdateAndEncodePassword() {
+        UserDto updateDto = new UserDto(2L, "Gabriel Laet Updated", "laet", "gabriellaetfm12@gmail.com", "newpass", "newpass");
 
-        UserEntity existingUser = new UserEntity();
-        existingUser.setId(2L);
-        existingUser.setFullName("Gabriel Laet");
-        existingUser.setEmail("gabriellaetfm12@gmail.com");
-        existingUser.setUsername("laet");
-        existingUser.setEncryptedPassword("oldpass");
+        UserEntity existing = new UserEntity();
+        existing.setId(2L);
+        existing.setFullName("Gabriel Laet");
+        existing.setEmail("gabriellaetfm12@gmail.com");
+        existing.setUsername("laet");
+        existing.setEncryptedPassword("oldpass");
 
-        when(userRepository.findById(2L)).thenReturn(Optional.of(existingUser));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(existing));
         when(passwordEncoder.encode("newpass")).thenReturn("encryptedNewPass");
         when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        UserDto updatedUser = userService.updateUser(userDto);
+        UserDto updated = userService.updateUser(updateDto);
 
-        assertNotNull(updatedUser);
-        assertEquals("Gabriel Laet Updated", updatedUser.fullName());
-
-        verify(userRepository).findById(2L);
-        verify(passwordEncoder).encode("newpass");
-        verify(userRepository).save(any(UserEntity.class));
+        assertNotNull(updated);
+        assertEquals("Gabriel Laet Updated", updated.fullName());
 
         ArgumentCaptor<UserEntity> captor = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(captor.capture());
@@ -181,12 +180,12 @@ public class UserServiceImplTest {
     }
 
     @Test
-    void testUpdateUser_ThrowsExceptionWhenDtoIsNullOrIdIsNull() {
+    void testUpdateUser_WhenDtoIsNullOrIdIsNull_ShouldThrowException() {
         IllegalArgumentException exception1 = assertThrows(IllegalArgumentException.class, () -> userService.updateUser(null));
         assertEquals("UserDto or UserDto.id must not be null", exception1.getMessage());
 
-        UserDto userDtoWithNullId = new UserDto(null, "Name", "username", "email@test.com", "123456", "123456");
-        IllegalArgumentException exception2 = assertThrows(IllegalArgumentException.class, () -> userService.updateUser(userDtoWithNullId));
+        UserDto dtoWithNullId = new UserDto(null, "Name", "username", "email@test.com", "123456", "123456");
+        IllegalArgumentException exception2 = assertThrows(IllegalArgumentException.class, () -> userService.updateUser(dtoWithNullId));
         assertEquals("UserDto or UserDto.id must not be null", exception2.getMessage());
     }
 
@@ -212,7 +211,5 @@ public class UserServiceImplTest {
         assertEquals(2, users.size());
         assertEquals("josefina", users.get(0).fullName());
         assertEquals("josegrosso", users.get(1).fullName());
-
-        verify(userRepository).findAll();
     }
 }
