@@ -208,6 +208,23 @@ public class UserServiceImplTest {
     }
 
     @Test
+    @DisplayName("Deve lançar exceção quando o username já existir")
+    public void testCreateUser_WhenUsernameExists_ShouldThrowException() {
+        when(userRepository.existsByUsername("laet")).thenReturn(true);
+
+        UserDto dto = new UserDto(null, "Gabriel Laet", "laet", "gabriellaetfm12@gmail.com", "123456", "123456");
+
+        FieldAlreadyExistsException ex =
+            assertThrows(FieldAlreadyExistsException.class, () -> userService.createUser(dto));
+
+        assertAll("Validação da exceção de username existente",
+            () -> assertEquals("Username already in use.", ex.getMessage()),
+            () -> verify(userRepository, times(1)).existsByUsername("laet")
+        );
+    }
+
+
+    @Test
     @DisplayName("Deve lançar exceção quando DTO ou ID forem nulos")
     void testUpdateUser_WhenDtoIsNullOrIdIsNull_ShouldThrowException() {
         assertAll("Validação de exceções ao atualizar",
