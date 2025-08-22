@@ -19,8 +19,8 @@ services:
     container_name: instagram-clone-frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend/instagram/:/home/instagram
+    # volumes:
+    #   - ./frontend/instagram/:/home/instagram
 
   db:
     image: mariadb:lts
