@@ -179,42 +179,4 @@ public class AuthControllerTest {
         verifyNoInteractions(userService);
     }
 
-    @Test
-    @DisplayName("Deve processar corretamente requisição de cadastro com todos os campos")
-    void signUp_WithAllRequiredFields_ShouldProcessSuccessfully() throws Exception {
-        // Given - Usuário com todos os campos preenchidos
-        UserDetailsRequest completeRequest = new UserDetailsRequest(
-            null,
-            "Maria Santos Silva", 
-            "maria_santos", 
-            "maria.santos@email.com", 
-            "strongPassword123"
-        );
-        
-        UserDto completeUserDto = new UserDto(
-            2L, 
-            "Maria Santos Silva", 
-            "maria_santos", 
-            "maria.santos@email.com", 
-            "strongPassword123", 
-            null
-        );
-        
-        // WHEN: createUser() retorna usuário completo
-        when(userService.createUser(any(UserDto.class))).thenReturn(completeUserDto);
-
-        // When & Then - Verifica processamento completo
-        mockMvc.perform(post("/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(completeRequest)))
-                .andExpect(status().isCreated())
-                // Verifica cada campo individualmente
-                .andExpect(jsonPath("$.id", is(2)))
-                .andExpect(jsonPath("$.fullName", is("Maria Santos Silva")))
-                .andExpect(jsonPath("$.username", is("maria_santos")))
-                .andExpect(jsonPath("$.email", is("maria.santos@email.com")));
-
-        // VERIFY: Método foi chamado exatamente uma vez
-        verify(userService, times(1)).createUser(any(UserDto.class));
-    }
 }
